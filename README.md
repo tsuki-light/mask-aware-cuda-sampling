@@ -4,6 +4,50 @@ A CUDA optimization experiment for masked diffusion language model inference, ev
 
 The project accelerates categorical sampling by eliminating redundant work at already-unmasked token positions. It combines fused FP64 sampling, multi-block parallel reduction, and mask-aware execution without changing the BF16 model weights, Transformer forward pass, or top-p filtering relative to the experimental PyTorch baseline.
 
+
+## V5: Dual-Level Sparsity-Aware Sampling
+
+V5 extends V3 with vocabulary-level zero-probability
+skipping, exploiting two levels of sparsity:
+
+- Token-level: skip already-unmasked token positions.
+- Vocabulary-level: skip zero-probability candidates
+  introduced by top-p filtering.
+
+The optimization is optional (`skip_zero=True`)
+and disabled by default.
+
+| Metric | Result |
+| --- | ---: |
+| Maximum end-to-end speedup vs. PyTorch | 1.231x |
+| Mean end-to-end speedup vs. PyTorch | 1.179x |
+| Maximum kernel speedup vs. V3 | 43.79x |
+| Mean end-to-end speedup vs. V3 | 1.071x |
+| Paired benchmark wins vs. V3 | 46/60 |
+| Peak allocated memory reduction | ~250 MiB |
+| Shared-noise token agreement | 128,448/128,448 |
+| Active token agreement | 62,243/62,243 |
+
+V5 improves five of six tested configurations.
+At length 64 and 64 diffusion steps, latency
+increased from 3.128s to 3.202s.
+
+Native RNG consumption differs when zero-probability
+candidates are skipped. Identical seeds therefore do
+not guarantee identical generation trajectories.
+
+Shared-noise validation passed across 960 sampling
+calls. Statistical tests found no significant deviation
+in the larger low-confidence retest. Downstream
+generation quality equivalence remains unproven.
+
+### V5 Experimental Results
+
+- [Sparse kernel benchmark](results/sparse_skip.csv)
+- [V5 vs. PyTorch](results/end_to_end_v5.csv)
+- [Paired V3 vs. V5 benchmark](results/v3_vs_v5.csv)
+
+
 ## Results
 
 | Metric | Measured result |
