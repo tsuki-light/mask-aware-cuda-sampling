@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.py[cod]
+*.so
+*.o
+build/
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.bin
+trace.json
+eval_results/
+.env
