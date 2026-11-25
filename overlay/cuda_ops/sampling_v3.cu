@@ -32,7 +32,8 @@ void sampling_partial(
     int vocab,
     uint64_t seed,
     uint64_t nonce,
-    double temperature
+    double temperature,
+    int skip_zero
 ) {
     int row = blockIdx.x;
 
@@ -56,12 +57,23 @@ void sampling_partial(
             nonce * (2ULL * vocab), &rng);
     }
 
-    double best = -INFINITY;
-    int best_idx = vocab;
+    // skip_zero:
+    //   p = 0 的格子分數必為 0 / g = 0，贏不了任何正分，
+    //   所以直接跳過，省掉 log / div 這段 FP64 運算。
+    //   起點設成 (0, 0)：整列都是 0 時仍回傳 index 0，
+    //   跟 torch.argmax 一樣。
+    // skip_zero = 0 時行為與原本 V3 逐 bit 相同。
+    double best = skip_zero ? 0.0 : -INFINITY;
+    int best_idx = skip_zero ? 0 : vocab;
 
     for (int i = part * THREADS + tid;
          i < vocab;
          i += PARTS * THREADS) {
+
+        float p = probs[base + i];
+
+        if (skip_zero && p == 0.0f)
+            continue;
 
         double u = noise
             ? noise[base + i]
@@ -75,7 +87,7 @@ void sampling_partial(
         if (temperature != 1.0)
             g = pow(g, temperature);
 
-        double score = (double)probs[base + i] / g;
+        double score = (double)p / g;
 
         if (score > best ||
             (score == best && i < best_idx)) {
@@ -158,6 +170,7 @@ extern "C" int sampling_forward_v3(
     uint64_t seed,
     uint64_t nonce,
     double temperature,
+    int skip_zero,
     cudaStream_t stream
 ) {
     sampling_partial<<<
@@ -165,7 +178,8 @@ extern "C" int sampling_forward_v3(
     >>>(
         probs, noise,
         partial_values, partial_indices,
-        x, mask_index, vocab, seed, nonce, temperature
+        x, mask_index, vocab, seed, nonce, temperature,
+        skip_zero
     );
 
     cudaError_t err = cudaGetLastError();

@@ -13,13 +13,20 @@ fn.argtypes = (
     [ctypes.c_int64] +
     [ctypes.c_int] * 2 +
     [ctypes.c_uint64] * 2 +
-    [ctypes.c_double, ctypes.c_void_p]
+    [ctypes.c_double, ctypes.c_int, ctypes.c_void_p]
 )
 
 fn.restype = ctypes.c_int
 
 def sample_cuda_v3(probs, x, mask_index, noise=None, seed=42,
-                   nonce=0, temperature=1.0):
+                   nonce=0, temperature=1.0, skip_zero=False):
+    """
+    skip_zero=True: 跳過 p == 0 的詞表格子（top-p 之後大多是 0）。
+      shared noise 下結果與 PyTorch 參考逐 token 相同；
+      native RNG 下抽樣分布不變，但同一個 seed/nonce 抽出的序列會跟
+      skip_zero=False 不同（被跳過的格子不再消耗亂數）。
+    預設 False，保持原本 V3 的行為與 README 數字可重現。
+    """
 
     assert probs.is_cuda
     assert probs.dtype == torch.float32
@@ -68,7 +75,8 @@ def sample_cuda_v3(probs, x, mask_index, noise=None, seed=42,
             x.data_ptr(),
             mask_index,
             rows, vocab, seed, nonce,
-            temperature, stream.cuda_stream
+            temperature, int(bool(skip_zero)),
+            stream.cuda_stream
         )
 
     if status != 0:
