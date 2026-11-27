@@ -7,6 +7,8 @@ The project accelerates categorical sampling by eliminating redundant work at al
 
 ## V5: Dual-Level Sparsity-Aware Sampling
 
+The following results describe the earlier benchmark. See the extended benchmark below for newer results.
+
 V5 extends V3 with vocabulary-level zero-probability
 skipping, exploiting two levels of sparsity:
 
@@ -48,7 +50,106 @@ generation quality equivalence remains unproven.
 - [Paired V3 vs. V5 benchmark](results/v3_vs_v5.csv)
 
 
-## Results
+
+## Extended End-to-End Benchmark
+
+NVIDIA SDLLM-MDLM-1.7B-Base, RTX 4050 Laptop 6GB,
+WSL2, BF16, batch size 1, 64 diffusion steps.
+30 measured runs per configuration, 360 runs in total.
+
+| Metric | Best measured result |
+| --- | ---: |
+| End-to-end speedup | 2.605x |
+| P50 latency reduction | 61.61% |
+| P95 latency reduction | 61.20% |
+| Effective TPS improvement | 160.50% |
+| Peak effective TPS | 37.41 |
+| Peak allocated memory reduction | 490.62 MiB |
+
+### Effective Throughput (TPS)
+
+| Length | PyTorch | CUDA V3 | CUDA V5 |
+| ---: | ---: | ---: | ---: |
+| 64 | 17.73 | 21.12 | 20.01 |
+| 128 | 24.09 | 28.43 | 29.60 |
+| 192 | 15.20 | 33.69 | 37.41 |
+| 256 | 12.94 | 33.42 | 33.71 |
+
+### P50 Latency (seconds)
+
+| Length | PyTorch | CUDA V3 | CUDA V5 | V5 Speedup |
+| ---: | ---: | ---: | ---: | ---: |
+| 64 | 3.609 | 3.030 | 3.198 | 1.129x |
+| 128 | 5.314 | 4.503 | 4.324 | 1.229x |
+| 192 | 12.631 | 5.699 | 5.132 | 2.461x |
+| 256 | 19.782 | 7.660 | 7.594 | 2.605x |
+
+### P95 Latency (seconds)
+
+| Length | PyTorch | CUDA V3 | CUDA V5 |
+| ---: | ---: | ---: | ---: |
+| 64 | 3.943 | 3.320 | 3.649 |
+| 128 | 5.491 | 4.887 | 4.603 |
+| 192 | 12.901 | 5.871 | 5.274 |
+| 256 | 19.931 | 7.769 | 7.733 |
+
+### Amortized Time per Token Position (ms)
+
+| Length | PyTorch | CUDA V3 | CUDA V5 |
+| ---: | ---: | ---: | ---: |
+| 64 | 56.39 | 47.35 | 49.97 |
+| 128 | 41.51 | 35.18 | 33.78 |
+| 192 | 65.79 | 29.68 | 26.73 |
+| 256 | 77.27 | 29.92 | 29.66 |
+
+### Peak Allocated GPU Memory (MiB)
+
+| Length | PyTorch | CUDA V3 | CUDA V5 |
+| ---: | ---: | ---: | ---: |
+| 64 | 4661.38 | 4635.40 | 4635.40 |
+| 128 | 5036.82 | 4786.20 | 4786.20 |
+| 192 | 5413.01 | 5042.38 | 5042.38 |
+| 256 | 5789.19 | 5298.57 | 5298.57 |
+
+### V5 Incremental Improvement over V3
+
+| Length | Median latency reduction |
+| ---: | ---: |
+| 64 | -5.54% |
+| 128 | 3.97% |
+| 192 | 9.95% |
+| 256 | 0.86% |
+
+### Methodology and Limitations
+
+- One warmup per configuration.
+- Rotating execution order across three modes.
+- Fixed random seed (42) and five-token prompt.
+- CUDA synchronization before and after timing.
+- All 360 measured runs completed successfully.
+- Effective TPS counts returned positions excluding
+  the prompt; actual emitted token counts remain
+  unverified.
+- Amortized time per token position is not TPOT.
+- TTFT was not directly measured.
+- Peak reserved memory was identical across modes
+  due to possible allocator reuse.
+- Long-sequence speedups may include GPU memory
+  residency or paging effects.
+- Downstream generation quality parity remains
+  unverified.
+
+A separate single-run capacity probe completed length
+384. Length 512 was interrupted after a prolonged
+stall; an exact capacity limit was not established.
+
+### Benchmark Artifacts
+
+- [Benchmark results](results/benchmark_formal.csv)
+- [Benchmark script](overlay/benchmark_extended.py)
+
+
+## Results (Earlier Experiments)
 
 | Metric | Measured result |
 | --- | ---: |
@@ -192,7 +293,7 @@ diffusion-llm-cuda-public/
 
 ## Limitations
 
-The optimization targets categorical sampling in the tested absorbing-mask sampler, not the entire diffusion model. Transformer computation and top-p sorting remain unchanged in V3. Results are limited to one model, one GPU, batch size one, generation lengths 64/128 and 16/32/64 diffusion steps. Sampling agreement under shared noise is not a proof for all inputs, and downstream quality equivalence is not established. The model-dependent scripts require manual integration as described above.
+The optimization targets categorical sampling in the tested absorbing-mask sampler, not the entire diffusion model. Transformer computation and top-p sorting remain unchanged in V3. Results are limited to one model, one GPU, batch size one, length settings 64–256 and 16/32/64 diffusion steps. Sampling agreement under shared noise is not a proof for all inputs, and downstream quality equivalence is not established. The model-dependent scripts require manual integration as described above.
 
 ## License and acknowledgments
 
